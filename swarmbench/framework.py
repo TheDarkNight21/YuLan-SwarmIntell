@@ -160,7 +160,7 @@ class SwarmFramework:
                                     for d in cls.submission.values()])
             fmt_str = f'{{:<{max_name_len}}} - {{:>{max_progress_len}}}'
             prev_prog = -1
-
+            print("hello")
             while True:
                 dones = 0
                 total_progress = 0
