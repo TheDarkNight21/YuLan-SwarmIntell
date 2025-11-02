@@ -121,16 +121,22 @@ class LocalChat:
         cache_key = f"{self.model_path}_{self.device}_{self.use_vllm}"
 
         if cache_key in _MODEL_CACHE:
-            print(f"Using cached model: {self.model_path}")
+            print(f"[LocalChat] Using cached model: {self.model_path}")
             return _MODEL_CACHE[cache_key]
 
-        print(f"Loading model: {self.model_path} on {self.device}...")
+        print(f"[LocalChat] Loading model: {self.model_path} on {self.device}...")
+
+        # Disable vLLM on Windows (not supported)
+        import platform
+        if platform.system() == "Windows" and self.use_vllm:
+            warnings.warn("vLLM is not supported on Windows. Using Transformers backend.")
+            self.use_vllm = False
 
         # Try vLLM first if requested and on GPU
         if self.use_vllm and self.device == "cuda":
             try:
                 from vllm import LLM, SamplingParams
-                print("Using vLLM backend for faster inference...")
+                print("[LocalChat] Using vLLM backend for faster inference...")
                 model = LLM(
                     model=self.model_path,
                     trust_remote_code=True,
@@ -138,7 +144,7 @@ class LocalChat:
                     tensor_parallel_size=1,
                 )
                 _MODEL_CACHE[cache_key] = (model, None, "vllm")
-                print(f"Model loaded successfully with vLLM!")
+                print(f"[LocalChat] Model loaded successfully with vLLM!")
                 return model, None, "vllm"
             except Exception as e:
                 warnings.warn(f"vLLM loading failed: {e}. Falling back to Transformers...")
@@ -146,21 +152,27 @@ class LocalChat:
         # Fallback to Transformers
         try:
             from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
-            print("Using Transformers backend...")
+            print("[LocalChat] Using Transformers backend...")
 
+            print(f"[LocalChat] Loading tokenizer from {self.model_path}...")
             tokenizer = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=True)
+            print(f"[LocalChat] Tokenizer loaded successfully")
+
+            print(f"[LocalChat] Loading model weights (this may take 30-60 seconds)...")
             model = AutoModelForCausalLM.from_pretrained(
                 self.model_path,
                 trust_remote_code=True,
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
                 device_map=self.device if self.device == "cuda" else None,
             )
+            print(f"[LocalChat] Model weights loaded")
 
             if self.device == "cpu":
+                print(f"[LocalChat] Moving model to CPU...")
                 model = model.to(self.device)
 
             _MODEL_CACHE[cache_key] = (model, tokenizer, "transformers")
-            print(f"Model loaded successfully with Transformers!")
+            print(f"[LocalChat] ✓ Model loaded successfully with Transformers!")
             return model, tokenizer, "transformers"
 
         except Exception as e:
@@ -197,6 +209,7 @@ class LocalChat:
 
     async def generate(self, content: str) -> str:
         """Generate response using local model (async wrapper for sync inference)."""
+        print(f"[LocalChat] generate() called, preparing inference...")
         self.msg.append({'role': 'user', 'content': content})
 
         # Prepare messages
@@ -204,18 +217,21 @@ class LocalChat:
 
         # Run inference in thread pool to avoid blocking
         # Use run_in_executor for Windows compatibility instead of asyncio.to_thread
+        print(f"[LocalChat] Running inference in thread pool...")
         loop = asyncio.get_event_loop()
         response_text = await loop.run_in_executor(
             self._executor,
             self._generate_sync,
             messages
         )
+        print(f"[LocalChat] Inference complete")
 
         self.msg.append({'role': 'assistant', 'content': response_text})
         return response_text
 
     def _generate_sync(self, messages) -> str:
         """Synchronous generation (called in thread pool)."""
+        print(f"[LocalChat._generate_sync] Starting sync generation with {self.backend} backend")
         if self.backend == "vllm":
             return self._generate_vllm(messages)
         else:
@@ -246,13 +262,16 @@ class LocalChat:
 
     def _generate_transformers(self, messages) -> str:
         """Generate using Transformers."""
+        print(f"[LocalChat._generate_transformers] Formatting prompt...")
         # Format prompt
         prompt = self._format_messages_for_model(messages)
 
+        print(f"[LocalChat._generate_transformers] Tokenizing...")
         # Tokenize
         inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True)
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
+        print(f"[LocalChat._generate_transformers] Generating response (this may take 10-30 seconds)...")
         # Generate
         with torch.no_grad():
             outputs = self.model.generate(
@@ -264,6 +283,7 @@ class LocalChat:
                 pad_token_id=self.tokenizer.eos_token_id,
             )
 
+        print(f"[LocalChat._generate_transformers] Decoding response...")
         # Decode (only new tokens)
         response_text = self.tokenizer.decode(
             outputs[0][inputs['input_ids'].shape[1]:],
@@ -273,6 +293,7 @@ class LocalChat:
         # Track token usage
         self.usage += outputs.shape[1] - inputs['input_ids'].shape[1]
 
+        print(f"[LocalChat._generate_transformers] ✓ Generation complete")
         return response_text
 
     def system(self, content: str):
