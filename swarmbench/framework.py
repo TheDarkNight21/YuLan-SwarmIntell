@@ -87,10 +87,39 @@ class SwarmFramework:
 
     @classmethod
     def model_config(cls, model, api_key, api_base):
+        """Create configuration for API-based models (OpenAI-compatible)."""
         cfg = ModelConfig()
+        cfg.model_type = "api"
         cfg.api_key = api_key
         cfg.api_base = api_base
         cfg.model = model
+        return cfg
+
+    @classmethod
+    def local_model_config(cls, model_path, device="auto", max_new_tokens=512,
+                          temperature=0.7, use_vllm=True):
+        """
+        Create configuration for local HuggingFace models.
+
+        Args:
+            model_path: HuggingFace model ID (e.g., 'meta-llama/Llama-3.2-3B-Instruct')
+                       or local path to model
+            device: Device to use ('auto', 'cuda', 'cpu'). Default: 'auto' (use GPU if available)
+            max_new_tokens: Maximum tokens to generate per response. Default: 512
+            temperature: Sampling temperature (0.0 = greedy, higher = more random). Default: 0.7
+            use_vllm: Use vLLM for faster inference if available (GPU only). Default: True
+
+        Returns:
+            ModelConfig object for local model
+        """
+        cfg = ModelConfig()
+        cfg.model_type = "local"
+        cfg.model = model_path  # For logging purposes
+        cfg.model_path = model_path
+        cfg.device = device
+        cfg.max_new_tokens = max_new_tokens
+        cfg.temperature = temperature
+        cfg.use_vllm = use_vllm
         return cfg
 
     @classmethod
