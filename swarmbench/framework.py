@@ -112,6 +112,11 @@ class SwarmFramework:
         Returns:
             ModelConfig object for local model
         """
+
+        # Auto-detect vLLM support
+        if use_vllm is None:
+            use_vllm = platform.system() != "Windows"  # Disable on Windows by default
+
         cfg = ModelConfig()
         cfg.model_type = "local"
         cfg.model = model_path  # For logging purposes

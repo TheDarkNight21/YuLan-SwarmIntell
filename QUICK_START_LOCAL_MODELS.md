@@ -5,7 +5,9 @@
 ### 1. Verify Your Environment
 ```bash
 # Check if you have GPU
-python -c "import torch; print('GPU available:', torch.cuda.is_available())"
+#python -c "import torch; print('GPU available:', torch.cuda.is_available())"
+
+python -c "import torch; print('CUDA version:', torch.version.cuda); print('Torch version:', torch.__version__); print('cuDNN available:', torch.backends.cudnn.is_available())"
 
 # Check VRAM (optional, for Linux/CUDA)
 nvidia-smi

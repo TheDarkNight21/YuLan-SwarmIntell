@@ -3,6 +3,7 @@ import asyncio
 import torch
 from typing import Optional
 import warnings
+import concurrent.futures
 
 
 class Chat:
@@ -45,7 +46,7 @@ class Chat:
     async def generate(self, content):
         self.msg.append({'role': 'user', 'content': content})
         client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-        
+
         response = await client.chat.completions.create(
             model=self.model,
             messages=[self.sys_prompt] + (self.msg if self.memory else self.msg[-1:]),  # 包含系统提示和消息历史
@@ -102,6 +103,9 @@ class LocalChat:
         self.msg = []
         self.sys_prompt = {'role': 'system', 'content': ''}
         self.usage = 0
+
+        # Create thread pool executor for Windows compatibility
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         # Load model (with caching)
         self.model, self.tokenizer, self.backend = self._load_model()
@@ -199,7 +203,13 @@ class LocalChat:
         messages = [self.sys_prompt] + (self.msg if self.memory else self.msg[-1:])
 
         # Run inference in thread pool to avoid blocking
-        response_text = await asyncio.to_thread(self._generate_sync, messages)
+        # Use run_in_executor for Windows compatibility instead of asyncio.to_thread
+        loop = asyncio.get_event_loop()
+        response_text = await loop.run_in_executor(
+            self._executor,
+            self._generate_sync,
+            messages
+        )
 
         self.msg.append({'role': 'assistant', 'content': response_text})
         return response_text
