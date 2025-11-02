@@ -28,7 +28,6 @@ def output(s):
 
 
 class SwarmFramework:
-
     instances = {}
     submission = {}
 
@@ -45,15 +44,17 @@ class SwarmFramework:
         return 'running'
 
     def run_task(self, model, task, log_dir=None,
-                  num_agents=10, max_round=100, width=12, height=12, seed=42, view_size=9):
+                 num_agents=10, max_round=100, width=12, height=12, seed=42, view_size=9):
+        print(f"[SwarmFramework.run_task] Starting task: {self.name}")
         if self.status != 'pending':
             raise RuntimeError(f'Cannot run task because task is already {self.status}.')
         env_name = self.name
-        
+        print(f"[SwarmFramework.run_task] Environment name: {env_name}")
+
         # Prepare agent parameters
         sys_prompt = "You are a agent. You need to cooperate with other agents and finish a given task."
         agent_args = {"sys_prompt": sys_prompt}
-        
+
         # Prepare logger parameters
         meta = {
             'model': model.model if isinstance(model, ModelConfig) else [m.model for m in model],
@@ -66,12 +67,14 @@ class SwarmFramework:
             'view_size': view_size,
         }
         logger_args = {"log_dir": log_dir, "meta": meta}
-        
+
         # Prepare environment parameters
         env_args = {"task": task, "seed": seed, "max_round": max_round,
                     'width': width, 'height': height, 'view_size': view_size}
 
+        print(f"[SwarmFramework.run_task] Creating Framework instance")
         self.framework = Framework()
+        print(f"[SwarmFramework.run_task] Calling Framework.start() - agents will be created here")
         # Use the framework to start the game
         self.framework.start(
             agent_cls=SwarmAgent,
@@ -84,6 +87,7 @@ class SwarmFramework:
             logger_args=logger_args,
             env_args=env_args
         )
+        print(f"[SwarmFramework.run_task] Framework.start() completed")
 
     @classmethod
     def model_config(cls, model, api_key, api_base):
@@ -97,7 +101,7 @@ class SwarmFramework:
 
     @classmethod
     def local_model_config(cls, model_path, device="auto", max_new_tokens=512,
-                          temperature=0.7, use_vllm=True):
+                           temperature=0.7, use_vllm=True):
         """
         Create configuration for local HuggingFace models.
 
@@ -188,8 +192,9 @@ class SwarmFramework:
                 if dones == len(cls.submission):
                     break
                 time.sleep(1)
-
-        with silence(), ThreadPoolExecutor(
+                # Temporarily disable silence() for debugging
+                # with silence(), ThreadPoolExecutor(
+        with ThreadPoolExecutor(
                 max_workers=len(cls.instances) if max_parallel is None else max_parallel
         ) as executor:
             for name in cls.instances:

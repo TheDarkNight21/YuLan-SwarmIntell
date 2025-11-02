@@ -106,7 +106,7 @@ def test_local_model_basic():
 
     print("[STEP 1/4] Configuring model...")
     model_config = SwarmFramework.local_model_config(
-        model_path='TinyLlama/TinyLlama-1.1B-Chat-v1.0',
+        model_path='meta-llama/Llama-3.2-3B-Instruct',
         device="auto",              # Use GPU if available
         temperature=0.7,
         max_new_tokens=512,

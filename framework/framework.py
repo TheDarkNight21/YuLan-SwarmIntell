@@ -50,10 +50,10 @@ class Framework:
               agent_args=None, logger_args=None, env_args=None):
         if agent_args is None:
             agent_args = {}
-        
+
         if logger_args is None:
             logger_args = {}
-            
+
         if env_args is None:
             env_args = {}
 
@@ -62,11 +62,15 @@ class Framework:
         self.agents = {}
         for i in range(num_agents):
             agent_name = f'Agent_{i}'
+            print(f"[Framework.start] Creating agent {i + 1}/{num_agents}: {agent_name}")
 
             # Create brain based on model type
             if model[i].model_type == "api":
+                print(f"[Framework.start] Creating API brain for {agent_name}")
                 brain = Chat(model[i].api_base, model[i].api_key, model[i].model)
             elif model[i].model_type == "local":
+                print(f"[Framework.start] Creating LocalChat brain for {agent_name}")
+                print(f"[Framework.start] This will load the model (may take 30-60s)...")
                 brain = LocalChat(
                     model[i].model_path,
                     device=model[i].device,
@@ -74,11 +78,14 @@ class Framework:
                     temperature=model[i].temperature,
                     use_vllm=model[i].use_vllm
                 )
+                print(f"[Framework.start] LocalChat brain created successfully for {agent_name}")
             else:
                 raise ValueError(f"Unknown model_type: {model[i].model_type}. Must be 'api' or 'local'.")
 
+            print(f"[Framework.start] Creating agent instance for {agent_name}")
             self.agents[agent_name] = agent_cls(agent_name, brain, **agent_args)
-        
+            print(f"[Framework.start] ✓ Agent {agent_name} created successfully")
+
         self.logger = logger_cls(env_name, **logger_args)
 
         self.env = env_cls(env_name, self.agents, self.logger, **env_args)

@@ -159,12 +159,32 @@ class LocalChat:
             print(f"[LocalChat] Tokenizer loaded successfully")
 
             print(f"[LocalChat] Loading model weights (this may take 30-60 seconds)...")
-            model = AutoModelForCausalLM.from_pretrained(
-                self.model_path,
-                trust_remote_code=True,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map=self.device if self.device == "cuda" else None,
-            )
+
+            # Load model - handle device_map carefully for Windows/accelerate compatibility
+            load_kwargs = {
+                "trust_remote_code": True,
+                "torch_dtype": torch.float16 if self.device == "cuda" else torch.float32,
+            }
+
+            # Only use device_map if on CUDA (requires accelerate library)
+            if self.device == "cuda":
+                try:
+                    # Try with device_map first (requires accelerate)
+                    load_kwargs["device_map"] = "cuda"
+                    model = AutoModelForCausalLM.from_pretrained(self.model_path, **load_kwargs)
+                except ImportError as e:
+                    if "accelerate" in str(e).lower():
+                        warnings.warn(f"accelerate not installed, loading without device_map (slower). Install with: pip install accelerate")
+                        # Fallback: load without device_map
+                        del load_kwargs["device_map"]
+                        model = AutoModelForCausalLM.from_pretrained(self.model_path, **load_kwargs)
+                        print(f"[LocalChat] Moving model to CUDA manually...")
+                        model = model.to(self.device)
+                    else:
+                        raise
+            else:
+                model = AutoModelForCausalLM.from_pretrained(self.model_path, **load_kwargs)
+
             print(f"[LocalChat] Model weights loaded")
 
             if self.device == "cpu":
